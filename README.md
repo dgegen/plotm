@@ -8,7 +8,7 @@
 
 ## Installation
 ```bash
-- pip install https://github.com/dgegen/plotm
+pip install git+https://github.com/dgegen/plotm
 ```
 
 ## Usage
