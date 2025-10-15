@@ -1,6 +1,5 @@
 import logging
-import warnings
-from contextlib import nullcontext
+from contextlib import nullcontext, suppress
 from pathlib import Path
 from typing import Any, Literal, Sequence, Union
 
@@ -32,6 +31,7 @@ class PlotManager:
     >>> plm.savefig('test_figure')
 
     """
+
     PROFILES_DIR = PROFILES_DIR
 
     def __init__(
@@ -46,7 +46,7 @@ class PlotManager:
         font_size: int | None = None,
         style_path: str | None = None,
         plot_dir: str | Path | None = None,
-        save: bool | None= None,
+        save: bool | None = None,
         configure: bool = False,
     ):
         self.profiles = [
@@ -68,7 +68,7 @@ class PlotManager:
         if self._plot_dir is not None:
             self._plot_dir.mkdir(exist_ok=True)
             save = True if save is None else save
-        
+
         self.save = save if save is not None else False
 
         if configure:
@@ -189,12 +189,11 @@ class PlotManager:
 
             style_ctx = self.style_context(prof.style_path) if prof.style_path else nullcontext()
             rc_ctx = mpl.rc_context(rc=prof.rc_params or {})
-            with style_ctx:
-                with rc_ctx:
-                    if prof.font_size is not None:
-                        self._apply_font_size_to_fig(fig, prof.font_size)
-                    fig.set_size_inches(*size, forward=True)
-                    plt.savefig(out_path, **(prof.save_kwargs or {}) | kwargs)
+            with style_ctx, rc_ctx:
+                if prof.font_size is not None:
+                    self._apply_font_size_to_fig(fig, prof.font_size)
+                fig.set_size_inches(*size, forward=True)
+                plt.savefig(out_path, **(prof.save_kwargs or {}) | kwargs)
 
         fig.set_size_inches(*orig_size, forward=True)
 
@@ -202,19 +201,15 @@ class PlotManager:
         """Apply base font size to existing text artists in the figure."""
         # axes titles, labels, ticks, legends
         for ax in fig.axes:
-            try:
+            with suppress(Exception):
                 ax.title.set_fontsize(base_size)  # type: ignore
-            except Exception:
-                pass
             try:
                 ax.xaxis.label.set_size(base_size)  # type: ignore
                 ax.yaxis.label.set_size(base_size)  # type: ignore
             except Exception:
                 pass
-            try:
+            with suppress(Exception):
                 ax.tick_params(axis="both", labelsize=base_size)
-            except Exception:
-                pass
             try:
                 legend = ax.get_legend()
                 if legend is not None:
@@ -480,12 +475,11 @@ def set_size(
     return (scale_factor * fig_width_in, rescale_height * scale_factor * fig_height_in)
 
 
-
 def open_dir(path: str | Path):
     import os
     import subprocess
     import sys
-    
+
     if not Path(path).exists():
         raise ValueError(f"Path '{path}' does not exist.")
 

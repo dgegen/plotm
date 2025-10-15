@@ -266,7 +266,7 @@ class ProfileManager:
         data["usage_type"] = path.stem
 
         data = cls._load_default_yaml() | data
-        
+
         if "style_path" in data:
             style_path = Path(data["style_path"])
             if (PROFILES_DIR / style_path).exists():
@@ -276,19 +276,18 @@ class ProfileManager:
             else:
                 logger.warning(f"Style path '{data['style_path']}' does not exist.")
                 data["style_path"] = None
-            
 
         return data
 
     def save_profile(self, profile: PlotProfile):
         """Save a PlotProfile to a YAML file."""
         profile_path = PROFILES_DIR / f"{profile.name}.yaml"
-        
+
         if profile.style_path is not None:
             style_path = Path(profile.style_path)
             if style_path.is_relative_to(STYLES_DIR):
                 profile.style_path = str(style_path.relative_to(STYLES_DIR))
-        
+
         profile.to_yaml(profile_path)
 
 

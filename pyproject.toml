@@ -1,46 +1,47 @@
 [build-system]
-requires = ["setuptools", "setuptools-scm", "wheel"]
 build-backend = "setuptools.build_meta"
+requires = ["setuptools", "setuptools-scm", "wheel"]
 
 [project]
-name = "plotm"
 authors = [
-    {name = "David Degen", email = "ddegen@ethz.ch"},
+  {email = "ddegen@ethz.ch", name = "David Degen"}
 ]
-description = "Lightweight plotting profile manager for consistent figure sizing and saving."
-readme = "README.md"
-requires-python = ">=3.10"
-keywords = ["science", "plotting", "matplotlib", "visualization"]
-license = {text = "MIT"}
 classifiers = [
-    "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3"
 ]
 dependencies = [
-    "matplotlib", "PyYAML",
+  "matplotlib",
+  "PyYAML"
 ]
+description = "Lightweight plotting profile manager for consistent figure sizing and saving."
+keywords = ["science", "plotting", "matplotlib", "visualization"]
+license = {text = "MIT"}
+name = "plotm"
+readme = "README.md"
+requires-python = ">=3.10"
 version = '0.1.0'
-
 
 [project.optional-dependencies]
 dev = [
-    "ruff",
+  "ruff",
+  "pre-commit"
 ]
 test = [
-    "pytest",
+  "pytest"
 ]
 
 [project.urls]
 
-[tool.setuptools.packages.find]
-where = ["src"]
-
 [tool.ruff]
 line-length = 100
 lint.extend-select = [
-    "B",
-    "C4",
-    "SIM",
-    "N", 
-    "RUF",
-    "TCH",
+  "B",
+  "C4",
+  "SIM",
+  "N",
+  "RUF",
+  "TCH"
 ]
+
+[tool.setuptools.packages.find]
+where = ["src"]
