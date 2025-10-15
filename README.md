@@ -1,33 +1,35 @@
-# plot_manager
+# `plotm`
 
-Lightweight plotting utilities and profile manager for consistent figure sizing and saving.
+`plotm` is a lightweight plotting utilities and profile manager for consistent figure sizing and saving.
 
-Features
+## Main features
 - Define plot profiles (size, saving options, rc params, style) as YAML files.
-- Profiles discovered at runtime from the package profiles directory (PROFILES_DIR / DEFAULT_PROFILES_DIR).
-- PlotProfile and PlotManager helpers to compute figure sizes and save figures consistently.
+- Use multiple profiles simultaneously with PlotManager, computing figure sizes and other configurations when saving images.
 
-Install (development)
-- From project root:
-  - pip install -e .
+## Installation
+```bash
+- pip install https://github.com/dgegen/plotm
+```
 
-Quick usage
+## Usage
 ```python
 from plotm import PlotManager
 
 # Use a named profile (discovered from PlotManager.PROFILES_DIR)
-plm = PlotManager(name="presentation", save=True, configure=True)
+plm = PlotManager(name="presentation", configure=True, plot_dir='.')
 
 fig, axes = plm.subplots(nrows=1, ncols=1)
 # ... draw on axes ...
 plm.savefig("figure_name")
 ```
 
-Profiles (YAML)
+### Profiles
 - Place profile YAML files under the package profiles directory used by the code (by default this is PROFILES_DIR; commonly `src/plotm/profiles/`).
 - Filenames (without .yaml) are used as profile names. Profiles are merged with a default profile.
 
-Example profile (save as e.g. `src/plotm/profiles/presentation.yaml`)
+### Example profile
+
+Profile that could be saved to `src/plotm/profiles/presentation.yaml`.
 ```yaml
 text_width: 600.0,
 rescale_height: 0.8,
