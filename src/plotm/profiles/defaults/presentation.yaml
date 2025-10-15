@@ -1,0 +1,8 @@
+text_width: 600.0,
+rescale_height: 0.8,
+suffix: svg
+font_size: 12
+
+save_kwargs: 
+  transparent: true
+  bbox_inches: tight"

@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "plotm"
+authors = [
+    {name = "David Degen", email = "ddegen@ethz.ch"},
+]
+description = "Lightweight plotting profile manager for consistent figure sizing and saving."
+readme = "README.md"
+requires-python = ">=3.10"
+keywords = ["science", "plotting", "matplotlib", "visualization"]
+license = {text = "MIT"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+]
+dependencies = [
+    "matplotlib", "PyYAML",
+]
+version = '0.1.0'
+
+
+[project.optional-dependencies]
+dev = [
+    "ruff",
+]
+test = [
+    "pytest",
+]
+
+[project.urls]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+lint.extend-select = [
+    "B",
+    "C4",
+    "SIM",
+    "N", 
+    "RUF",
+    "TCH",
+]
