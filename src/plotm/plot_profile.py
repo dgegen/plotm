@@ -247,6 +247,7 @@ class ProfileManager:
         else:
             default_data = {
                 "usage_type": "default",
+                "font_size": 12,
                 "text_width": 483.69687,
                 "rescale_height": 1.0,
                 "suffix": "pdf",
