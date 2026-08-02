@@ -2,6 +2,13 @@
 build-backend = "setuptools.build_meta"
 requires = ["setuptools", "setuptools-scm", "wheel"]
 
+[dependency-groups]
+dev = [
+  "pre-commit>=4.6.1",
+  "pytest>=9.1.1",
+  "ruff>=0.16.1"
+]
+
 [project]
 authors = [
   {email = "ddegen@ethz.ch", name = "David Degen"}

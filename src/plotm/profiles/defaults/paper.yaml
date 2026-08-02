@@ -1,2 +1,6 @@
 suffix: pdf
 font_size: 12
+
+rc_params:
+  axes.spines.right: true
+  axes.spines.top: true
