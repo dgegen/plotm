@@ -373,6 +373,8 @@ class PlotManager:
 
     def use_style(self):
         plt.style.use(DEFAULT_STYLE if self.profile.style_path is None else self.profile.style_path)
+        if self.profile.rc_params:
+            mpl.rcParams.update(self.profile.rc_params)
 
     @staticmethod
     def style_context(style_path: str | None = None):
