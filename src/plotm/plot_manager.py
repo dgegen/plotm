@@ -188,7 +188,7 @@ class PlotManager:
                 size = prof.fig_size()
 
             style_ctx = self.style_context(prof.style_path) if prof.style_path else nullcontext()
-            rc_ctx = mpl.rc_context(rc=prof.rc_params or {})
+            rc_ctx = mpl.rc_context(rc=self._get_rc_params(prof))
             with style_ctx, rc_ctx:
                 if prof.font_size is not None:
                     self._apply_font_size_to_fig(fig, prof.font_size)
@@ -304,6 +304,23 @@ class PlotManager:
     def open_profiles_dir(self):
         open_dir(self.PROFILES_DIR)
 
+    def _get_rc_params(self, profile: PlotProfile | None = None) -> dict[str, Any]:
+        prof = profile or self.profile
+        rc = dict(prof.rc_params or {})
+        if prof.font_size is not None:
+            fs = prof.font_size
+            for key in (
+                "font.size",
+                "axes.labelsize",
+                "axes.titlesize",
+                "xtick.labelsize",
+                "ytick.labelsize",
+                "legend.fontsize",
+                "figure.titlesize",
+            ):
+                rc.setdefault(key, fs)
+        return rc
+
     def figure(
         self,
         rescale_height: float = 1.0,
@@ -316,7 +333,14 @@ class PlotManager:
             fraction=fraction,
             scale_factor=scale_factor,
         )
-        return plt.figure(**kwargs)
+        style_ctx = (
+            self.style_context(self.profile.style_path)
+            if self.profile.style_path
+            else nullcontext()
+        )
+        rc_ctx = mpl.rc_context(rc=self._get_rc_params())
+        with style_ctx, rc_ctx:
+            return plt.figure(**kwargs)
 
     def subplots(
         self,
@@ -341,19 +365,26 @@ class PlotManager:
             fraction=fraction,
             scale_factor=scale_factor,
         )
-        return plt.subplots(
-            nrows=nrows,
-            ncols=ncols,
-            figsize=size,
-            sharex=sharex,
-            sharey=sharey,
-            squeeze=squeeze,
-            width_ratios=width_ratios,
-            height_ratios=height_ratios,
-            subplot_kw=subplot_kw,  # type: ignore
-            gridspec_kw=gridspec_kw,  # type: ignore
-            **kwargs,
+        style_ctx = (
+            self.style_context(self.profile.style_path)
+            if self.profile.style_path
+            else nullcontext()
         )
+        rc_ctx = mpl.rc_context(rc=self._get_rc_params())
+        with style_ctx, rc_ctx:
+            return plt.subplots(
+                nrows=nrows,
+                ncols=ncols,
+                figsize=size,
+                sharex=sharex,
+                sharey=sharey,
+                squeeze=squeeze,
+                width_ratios=width_ratios,
+                height_ratios=height_ratios,
+                subplot_kw=subplot_kw,  # type: ignore
+                gridspec_kw=gridspec_kw,  # type: ignore
+                **kwargs,
+            )
 
     @staticmethod
     def set_font_sizes(base_size=10):
@@ -373,8 +404,9 @@ class PlotManager:
 
     def use_style(self):
         plt.style.use(DEFAULT_STYLE if self.profile.style_path is None else self.profile.style_path)
-        if self.profile.rc_params:
-            mpl.rcParams.update(self.profile.rc_params)
+        rc = self._get_rc_params()
+        if rc:
+            mpl.rcParams.update(rc)
 
     @staticmethod
     def style_context(style_path: str | None = None):
