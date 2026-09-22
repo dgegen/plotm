@@ -40,6 +40,7 @@ test = [
 [project.urls]
 
 [tool.ruff]
+extend-exclude = ["uv.lock"]
 line-length = 100
 lint.extend-select = [
   "B",

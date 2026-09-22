@@ -1,5 +1,5 @@
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any, Union
@@ -8,7 +8,7 @@ import yaml
 
 from plotm.paths import DEFAULT_PROFILES_DIR, PROFILES_DIR, STYLES_DIR
 
-__all__ = ["PlotProfile"]
+__all__ = ["PlotProfile", "ProfileManager", "UsageType"]
 
 logger = logging.getLogger("plotm")
 
@@ -81,13 +81,15 @@ class PlotProfile:
 
     Examples
     --------
-    >>> from lightkite.utils.plot import PlotProfile
-    >>> profile = PlotProfile(name='paper', usage_type='paper_2col', font_size=8)
+    >>> from plotm import PlotProfile
+    >>> profile = PlotProfile(name='aa', layout='2col', font_size=8)
     >>> profile.to_yaml('my_profile.yaml')
     """
 
     name: str = "default"
-    usage_type: UsageType = UsageType.DEFAULT
+    usage_type: str | UsageType = "default"
+    layout: str | None = None
+    layouts: dict[str, dict[str, Any]] = field(default_factory=dict)
     text_width: float | str = "paper"
     rescale_height: float = 1.0
     suffix: str | None = None
@@ -98,8 +100,10 @@ class PlotProfile:
 
     def __init__(
         self,
-        name: None | str,
+        name: None | str = None,
         usage_type: str | None = None,
+        layout: str | None = None,
+        layouts: dict[str, dict[str, Any]] | None = None,
         text_width: float | None = None,
         rescale_height: float | None = None,
         suffix: str | None = None,
@@ -109,47 +113,49 @@ class PlotProfile:
         style_path: str | None = None,
     ):
         self.name = self._get_name(name, usage_type)
-        # self.usage_type = UsageType.determine(self.name if usage_type is None else usage_type)
-        profile = ProfileManager.load(usage_type if usage_type is not None else self.name)
+        lookup_key = usage_type if usage_type is not None else self.name
+        profile = ProfileManager.load(lookup_key, layout=layout)
 
-        self.suffix = name if suffix is None else suffix
-        self.usage_type = profile["usage_type"]
+        self.usage_type = profile.get("usage_type", "default")
+        self.layouts = layouts if layouts is not None else profile.get("layouts", {})
+        self.layout = layout or profile.get("layout", None)
 
-        self.text_width = (
-            text_width if isinstance(text_width, (float, int)) else profile["text_width"]
-        )
+        if self.layout and self.layouts and self.layout in self.layouts:
+            layout_cfg = self.layouts[self.layout] or {}
+            base_text_width = layout_cfg.get("text_width", profile.get("text_width", 483.69687))
+            base_rescale_height = layout_cfg.get(
+                "rescale_height", profile.get("rescale_height", 1.0)
+            )
+        else:
+            base_text_width = profile.get("text_width", 483.69687)
+            base_rescale_height = profile.get("rescale_height", 1.0)
+
+        self.text_width = text_width if isinstance(text_width, (float, int)) else base_text_width
         self.rescale_height = (
-            rescale_height
-            if isinstance(rescale_height, (float, int))
-            else profile["rescale_height"]
+            rescale_height if isinstance(rescale_height, (float, int)) else base_rescale_height
         )
         self.save_kwargs = (
             save_kwargs if isinstance(save_kwargs, dict) else profile.get("save_kwargs", {})
         )
         self.suffix = str(suffix) if isinstance(suffix, str) else profile.get("suffix", "pdf")
         self.rc_params = rc_params if isinstance(rc_params, dict) else profile.get("rc_params", {})
-        self.font_size = font_size if isinstance(font_size, int) else profile["font_size"]
-
+        self.font_size = font_size if isinstance(font_size, int) else profile.get("font_size", 12)
         self.style_path = style_path if isinstance(style_path, str) else profile.get("style_path")
 
     @classmethod
     def from_yaml(cls, path: str | Path):
-        import yaml
-
         with open(path, "r") as f:
-            data = yaml.safe_load(f)
+            data = yaml.safe_load(f) or {}
         return cls(**data)
 
     def to_dict(self) -> dict[str, Any]:
-        profile_dict = self.__dict__
-        profile_dict["usage_type"] = self.usage_type.value
+        profile_dict = dict(self.__dict__)
+        if isinstance(self.usage_type, UsageType):
+            profile_dict["usage_type"] = self.usage_type.value
         return profile_dict
 
     def to_yaml(self, path: str | Path):
-        import yaml
-
         profile_dict = self.to_dict()
-
         with open(path, "w") as f:
             yaml.dump(profile_dict, f)
 
@@ -157,16 +163,31 @@ class PlotProfile:
         self,
         nrows: int | tuple | list = 1,
         ncols: int = 1,
+        layout: str | None = None,
         rescale_height: float = 1.0,
         fraction: float = 1.0,
         scale_factor: float = 1.0,
     ):
         nrows, ncols = self._maybe_unpack_rows_and_columns(nrows, ncols)
 
+        active_layout = layout or self.layout
+        tw = self.text_width
+        rh = self.rescale_height
+
+        if active_layout and self.layouts and active_layout in self.layouts:
+            layout_cfg = self.layouts[active_layout] or {}
+            tw = layout_cfg.get("text_width", tw)
+            rh = layout_cfg.get("rescale_height", rh)
+        elif active_layout and (not self.layouts or active_layout not in self.layouts):
+            logger.warning(
+                f"Layout '{active_layout}' not found in profile '{self.name}'. "
+                f"Using default dimensions."
+            )
+
         return set_size(
             subplots=(nrows, ncols),
-            text_width=self.text_width,
-            rescale_height=self.rescale_height * rescale_height,
+            text_width=tw,
+            rescale_height=rh * rescale_height,
             fraction=fraction,
             scale_factor=scale_factor,
         )
@@ -180,12 +201,17 @@ class PlotProfile:
             name = str(name)
         elif name is None and isinstance(usage_type, UsageType):
             name = usage_type.value
+        elif name is None and isinstance(usage_type, str):
+            name = usage_type
         else:
             name = "default"
         return name
 
     def _set_usage_type_defaults(self):
-        usage_type_defaults = self.usage_type.defaults()
+        if isinstance(self.usage_type, UsageType):
+            usage_type_defaults = self.usage_type.defaults()
+        else:
+            usage_type_defaults = UsageType.determine(self.usage_type).defaults()
         self.text_width = usage_type_defaults["text_width"]
         self.rescale_height = usage_type_defaults["rescale_height"]
         self.suffix = usage_type_defaults["suffix"]
@@ -195,7 +221,6 @@ class PlotProfile:
     def _maybe_unpack_rows_and_columns(
         nrows: int | tuple | list, ncols: int = 1
     ) -> tuple[int, int]:
-        # args should be either a tuple of (nrows, ncols) or two integers
         if isinstance(nrows, (list, tuple)):
             if len(nrows) == 2:
                 nrows, ncols = nrows
@@ -222,18 +247,32 @@ class ProfileManager:
         return {p.name.removesuffix(".yaml"): p for p in DEFAULT_PROFILES_DIR.glob("*.yaml")}
 
     @classmethod
-    def load(cls, name: str) -> dict:
+    def load(cls, name: str | None, layout: str | None = None) -> dict:
         """Return profile with given name, or a default profile if not found."""
+        if name is None:
+            return cls._load_default_yaml()
+
         name = str(name).lower()
 
         profiles = cls.profiles()
         if name in profiles:
-            return cls._load_yaml(profiles[name])
+            return cls._load_yaml(profiles[name], layout=layout)
 
         default_profiles = cls.default_profiles()
         if name in default_profiles:
-            return cls._load_yaml(default_profiles[name])
+            return cls._load_yaml(default_profiles[name], layout=layout)
 
+        # Check for {base}_{layout} pattern (e.g. aa_2col -> base 'aa' with layout '2col')
+        if "_" in name:
+            base_name, potential_layout = name.rsplit("_", 1)
+            if base_name in profiles:
+                return cls._load_yaml(profiles[base_name], layout=layout or potential_layout)
+            if base_name in default_profiles:
+                return cls._load_yaml(
+                    default_profiles[base_name], layout=layout or potential_layout
+                )
+
+        logger.warning(f"Profile '{name}' not found. Falling back to default profile.")
         return cls._load_default_yaml()
 
     @classmethod
@@ -243,7 +282,7 @@ class ProfileManager:
 
         if default_path.exists():
             with open(default_path, "r") as f:
-                default_data = yaml.safe_load(f)
+                default_data = yaml.safe_load(f) or {}
         else:
             default_data = {
                 "usage_type": "default",
@@ -251,34 +290,44 @@ class ProfileManager:
                 "text_width": 483.69687,
                 "rescale_height": 1.0,
                 "suffix": "pdf",
+                "layout": None,
+                "layouts": {
+                    "1col": {},
+                    "2col": {"text_width": 241.848435},
+                },
                 "save_kwargs": {},
+                "rc_params": {},
             }
 
         return default_data
 
     @classmethod
-    def _load_yaml(cls, path: str | Path) -> dict:
+    def _load_yaml(cls, path: str | Path, layout: str | None = None) -> dict:
         if not isinstance(path, Path):
             path = Path(path)
 
         with open(path, "r") as f:
-            data = yaml.safe_load(f)
+            data = yaml.safe_load(f) or {}
 
         data["usage_type"] = path.stem
 
-        data = cls._load_default_yaml() | data
+        default_data = cls._load_default_yaml()
+        merged = default_data | data
 
-        if "style_path" in data:
-            style_path = Path(data["style_path"])
+        if layout is not None:
+            merged["layout"] = layout
+
+        if merged.get("style_path"):
+            style_path = Path(merged["style_path"])
             if (PROFILES_DIR / style_path).exists():
-                data["style_path"] = str(PROFILES_DIR / style_path)
+                merged["style_path"] = str(PROFILES_DIR / style_path)
             elif style_path.is_absolute() and style_path.exists():
-                data["style_path"] = str(style_path)
+                merged["style_path"] = str(style_path)
             else:
-                logger.warning(f"Style path '{data['style_path']}' does not exist.")
-                data["style_path"] = None
+                logger.warning(f"Style path '{merged['style_path']}' does not exist.")
+                merged["style_path"] = None
 
-        return data
+        return merged
 
     def save_profile(self, profile: PlotProfile):
         """Save a PlotProfile to a YAML file."""
@@ -313,7 +362,7 @@ def set_size(
         subplots: array-like, optional
                 The number of rows and columns of subplots.
         scale_factor: float
-            Facto to scale width and height with.
+            Factor to scale width and height with.
         rescale_height: float
             Factor to rescale height.
 
@@ -323,9 +372,6 @@ def set_size(
                 Dimensions of figure in inches
     """
     if text_width == "paper":
-        # Textwidth of LaTeX file. Can be determined by typing
-        # \the\text_width
-        # in your latex file and then compiling.
         width_pt = 483.69687
     elif text_width == "beamer":
         width_pt = 307.28987
@@ -342,7 +388,6 @@ def set_size(
     inches_per_pt = 1 / 72.27
 
     # Golden ratio to set aesthetic figure height
-    # https://disq.us/p/2940ij3
     golden_ratio = (5**0.5 - 1) / 2
 
     # Figure width in inches

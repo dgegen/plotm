@@ -1,7 +1,7 @@
 import logging
 from contextlib import nullcontext, suppress
 from pathlib import Path
-from typing import Any, Literal, Sequence, Union
+from typing import Any, Literal, Sequence
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -25,11 +25,10 @@ class PlotManager:
     Examples
     --------
     >>> from plotm import PlotManager
-    >>> plm = PlotManager(name="paper", font_size=8, configure=True, save=True)
+    >>> plm = PlotManager(name="aa", layout="2col", font_size=8, configure=True, save=True)
     >>> plm.add_profile(name='presentation')
     >>> fig, axes = plm.subplots(nrows=2, ncols=2)
     >>> plm.savefig('test_figure')
-
     """
 
     PROFILES_DIR = PROFILES_DIR
@@ -38,6 +37,8 @@ class PlotManager:
         self,
         name: str | None = None,
         usage_type: str | None = None,
+        layout: str | None = None,
+        layouts: dict[str, dict[str, Any]] | None = None,
         text_width: float | None = None,
         rescale_height: float | None = None,
         suffix: str | None = None,
@@ -53,6 +54,8 @@ class PlotManager:
             PlotProfile(
                 name=name,
                 usage_type=usage_type or name,
+                layout=layout,
+                layouts=layouts,
                 text_width=text_width,
                 rescale_height=rescale_height,
                 suffix=suffix,
@@ -90,6 +93,8 @@ class PlotManager:
         self,
         name: str,
         usage_type: str | None = None,
+        layout: str | None = None,
+        layouts: dict[str, dict[str, Any]] | None = None,
         text_width: float | None = None,
         rescale_height: float | None = None,
         suffix: str | None = None,
@@ -102,10 +107,13 @@ class PlotManager:
         """Add a new profile to the manager."""
         if isinstance(profile, PlotProfile):
             self.profiles.append(profile)
+            return profile
         else:
-            profile = PlotProfile(
+            new_profile = PlotProfile(
                 name=name,
                 usage_type=usage_type or name,
+                layout=layout,
+                layouts=layouts,
                 text_width=text_width,
                 rescale_height=rescale_height,
                 suffix=suffix,
@@ -114,8 +122,8 @@ class PlotManager:
                 font_size=font_size,
                 style_path=style_path,
             )
-        self.profiles.append(profile)
-        return profile
+            self.profiles.append(new_profile)
+            return new_profile
 
     @property
     def profile(self) -> PlotProfile:
@@ -129,19 +137,24 @@ class PlotManager:
 
     @property
     def profile_use_types(self) -> list[str]:
-        return [p.usage_type.value for p in self.profiles]
+        return [
+            p.usage_type.value if hasattr(p.usage_type, "value") else str(p.usage_type)
+            for p in self.profiles
+        ]
 
     def fig_size(
         self,
         nrows: int | tuple | list = 1,
         ncols: int = 1,
+        layout: str | None = None,
         rescale_height: float = 1.0,
         fraction: float = 1.0,
         scale_factor: float = 1.0,
     ):
-        self._last_figsize_kwargs: dict = {
+        self._last_figsize_kwargs = {
             "nrows": nrows,
             "ncols": ncols,
+            "layout": layout,
             "rescale_height": rescale_height,
             "fraction": fraction,
             "scale_factor": scale_factor,
@@ -149,6 +162,7 @@ class PlotManager:
         return self.profile.fig_size(
             nrows=nrows,
             ncols=ncols,
+            layout=layout,
             rescale_height=rescale_height,
             fraction=fraction,
             scale_factor=scale_factor,
@@ -254,8 +268,6 @@ class PlotManager:
           - single profile name (str) -> profile with that name
           - list of names -> list of profiles in that order
           - PlotProfile or list of PlotProfile -> passed through
-
-        Raises ValueError if a named profile is not found.
         """
         if profiles is None:
             return list(self.profiles)
@@ -290,10 +302,11 @@ class PlotManager:
                         resolved.append(p)
                         break
                 else:
-                    raise ValueError(f"No profile named '{name}'")
+                    logger.warning(f"No profile named '{name}'. Skipping.")
             return resolved
 
-        raise ValueError("profiles must be None, a profile name, PlotProfile or a sequence thereof")
+        logger.warning("Invalid profiles specification. Falling back to all configured profiles.")
+        return list(self.profiles)
 
     def open_plot_dir(self):
         if self.plot_dir is None:
@@ -323,12 +336,14 @@ class PlotManager:
 
     def figure(
         self,
+        layout: str | None = None,
         rescale_height: float = 1.0,
         fraction: float = 1.0,
         scale_factor: float = 1.0,
         **kwargs,
     ) -> Figure:
         kwargs["figsize"] = self.fig_size(
+            layout=layout,
             rescale_height=rescale_height,
             fraction=fraction,
             scale_factor=scale_factor,
@@ -346,6 +361,7 @@ class PlotManager:
         self,
         nrows: int = 1,
         ncols: int = 1,
+        layout: str | None = None,
         rescale_height: float = 1.0,
         fraction: float = 1.0,
         scale_factor: float = 1.0,
@@ -361,6 +377,7 @@ class PlotManager:
         size = self.fig_size(
             nrows=nrows,
             ncols=ncols,
+            layout=layout,
             rescale_height=rescale_height,
             fraction=fraction,
             scale_factor=scale_factor,
@@ -436,7 +453,6 @@ class PlotManager:
             return False
 
         fmt = str(fmt)
-        # run_line_magic(magic_name, line)
         ip.run_line_magic("config", f"InlineBackend.figure_format = '{fmt}'")
         return True
 
@@ -446,67 +462,6 @@ class PlotManager:
 
     def __repr__(self) -> str:
         return f"PlotManager(profiles={self.profiles}, plot_dir='{self.plot_dir}, save={self.save})"
-
-
-def set_size(
-    subplots=(1, 1),
-    text_width: Union[float, str] = "paper",
-    rescale_height: float = 1.0,
-    fraction: float = 1.0,
-    scale_factor: float = 1.0,
-):
-    """Set figure dimensions to avoid scaling in LaTeX.
-
-    Based largely on Jack Walton's post on ploting figures with matplotlib and LaTeX:
-    https://jwalton.info/Embed-Publication-Matplotlib-Latex/
-
-    Parameters
-    ----------
-        text_width: float or string
-                Document width in points, or string of predefined document type.
-        fraction: float, optional
-                Fraction of the width which you wish the figure to occupy.
-        subplots: array-like, optional
-                The number of rows and columns of subplots.
-        scale_factor: float
-            Facto to scale width and height with.
-        rescale_height: float
-            Factor to rescale height.
-
-    Returns
-    -------
-        fig_dim: tuple
-                Dimensions of figure in inches
-    """
-    if text_width == "paper":
-        # Textwidth of LaTeX file. Can be determined by typing
-        # \the\text_width
-        # in your latex file and then compiling.
-        width_pt = 483.69687
-    elif text_width == "beamer":
-        width_pt = 307.28987
-    elif text_width == "presentation":
-        width_pt = 600
-    elif isinstance(text_width, (float, int)):
-        width_pt = text_width
-    else:
-        raise ValueError("Textwidth has to be 'paper', 'beamer', 'presentation' or a float.")
-
-    # Width of figure (in pts)
-    fig_width_pt = width_pt * fraction
-    # Convert from pt to inches
-    inches_per_pt = 1 / 72.27
-
-    # Golden ratio to set aesthetic figure height
-    # https://disq.us/p/2940ij3
-    golden_ratio = (5**0.5 - 1) / 2
-
-    # Figure width in inches
-    fig_width_in = fig_width_pt * inches_per_pt
-    # Figure height in inches
-    fig_height_in = fig_width_in * golden_ratio * (subplots[0] / subplots[1])
-
-    return (scale_factor * fig_width_in, rescale_height * scale_factor * fig_height_in)
 
 
 def open_dir(path: str | Path):

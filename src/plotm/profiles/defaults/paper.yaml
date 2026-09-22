@@ -1,6 +1,16 @@
 suffix: pdf
 font_size: 12
+text_width: 483.69687
+rescale_height: 1.0
 
 rc_params:
   axes.spines.right: true
   axes.spines.top: true
+
+save_kwargs:
+  bbox_inches: tight
+
+layouts:
+  1col: {}
+  2col:
+    text_width: 241.848435
